@@ -1,0 +1,441 @@
+{% extends "base.html" %}
+
+{% block title %}Trade - Stock Trading Platform{% endblock %}
+
+{% block content %}
+<div class="trade-container">
+    <h1>Stock Trading</h1>
+
+    <div class="trade-grid">
+        <!-- Stock Search & Selection (LEFT) -->
+        <div class="card stock-search">
+            <div class="card-header">
+                <h3>Search Stocks</h3>
+            </div>
+            <div class="card-body">
+                <div class="search-box">
+                    <input type="text" id="stockSearch" placeholder="Search by symbol (e.g., AAPL)..." class="form-control">
+                </div>
+                <div id="stockList" class="stock-list">
+                    <!-- Populated by JavaScript -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Stock Chart with Trading (RIGHT) -->
+        <div class="card stock-chart-card">
+            <div class="card-header">
+                <div class="chart-header-top">
+                    <h3 id="chartTitle">30-Day Price Chart</h3>
+                    <div id="stockDetailsHeader" class="stock-details-header" style="display: none;">
+                        <div class="current-price" id="headerPrice">$0.00</div>
+                        <div class="price-change" id="headerChange">0.00%</div>
+                    </div>
+                </div>
+                <div id="timeframeButtons" class="timeframe-buttons" style="display: none;">
+                    <button class="timeframe-btn active" data-timeframe="5m" onclick="changeTimeframe('5m')">5 Min</button>
+                    <button class="timeframe-btn" data-timeframe="1w" onclick="changeTimeframe('1w')">1 Week</button>
+                    <button class="timeframe-btn" data-timeframe="1m" onclick="changeTimeframe('1m')">1 Month</button>
+                </div>
+            </div>
+            <div class="card-body chart-body">
+                <div id="chartContainer" style="display: none;">
+                    <canvas id="priceChart"></canvas>
+                </div>
+                <div id="chartPlaceholder" class="empty-state">
+                    Select a stock to view price chart
+                </div>
+
+                <!-- Trading Controls at Bottom of Chart -->
+                <div id="tradingControls" class="trading-controls" style="display: none;">
+                    <div class="trade-info">
+                        <div class="info-row">
+                            <span>Quantity:</span>
+                            <div class="quantity-input">
+                                <button type="button" class="qty-btn" onclick="decreaseQuantity()">−</button>
+                                <input type="number" id="quantity" min="1" value="1" class="form-control qty-input">
+                                <button type="button" class="qty-btn" onclick="increaseQuantity()">+</button>
+                            </div>
+                        </div>
+                        <div class="info-row">
+                            <span>Unit Price:</span>
+                            <span id="unitPrice" class="price-value">$0.00</span>
+                        </div>
+                        <div class="info-row total">
+                            <span>Total:</span>
+                            <span id="totalCost" class="price-value">$0.00</span>
+                        </div>
+                    </div>
+
+                    <div class="button-group">
+                        <button type="button" id="buyBtn" class="btn btn-success btn-lg" onclick="executeBuy()">
+                            <i class="fas fa-arrow-down"></i> Buy
+                        </button>
+                        <button type="button" id="sellBtn" class="btn btn-danger btn-lg" onclick="executeSell()">
+                            <i class="fas fa-arrow-up"></i> Sell
+                        </button>
+                    </div>
+
+                    <div id="confirmationMessage" class="message" style="display: none;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Available Stocks Table -->
+    <div class="card available-stocks">
+        <div class="card-header">
+            <h3>Available Stocks</h3>
+        </div>
+        <div class="card-body">
+            <div class="stocks-table">
+                <div class="table-header">
+                    <div class="table-cell">Symbol</div>
+                    <div class="table-cell">Company</div>
+                    <div class="table-cell">Current Price</div>
+                    <div class="table-cell">Change</div>
+                    <div class="table-cell">Action</div>
+                </div>
+                <div id="stocksTableBody">
+                    <!-- Populated by JavaScript -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+let stocks = {{ stocks | tojson }};
+let selectedStock = null;
+let priceChart = null;
+let currentTimeframe = '1m';  // Default to 1 month
+
+// Initialize stock list
+function initializeStocks() {
+    const stockList = document.getElementById('stockList');
+    const stocksTableBody = document.getElementById('stocksTableBody');
+    
+    // Clear existing items
+    stockList.innerHTML = '';
+    stocksTableBody.innerHTML = '';
+    
+    // Populate stock list
+    for (const [symbol, data] of Object.entries(stocks)) {
+        // List item
+        const listItem = document.createElement('div');
+        listItem.className = 'stock-item';
+        listItem.onclick = () => selectStock(symbol);
+        listItem.innerHTML = `
+            <div class="stock-item-header">
+                <span class="stock-symbol">${symbol}</span>
+                <span class="stock-price">$${data.price.toFixed(2)}</span>
+            </div>
+            <div class="stock-item-name">${data.name}</div>
+            <div class="stock-change ${data.change >= 0 ? 'positive' : 'negative'}">
+                ${data.change >= 0 ? '+' : ''}${data.change.toFixed(2)}%
+            </div>
+        `;
+        stockList.appendChild(listItem);
+        
+        // Table row
+        const row = document.createElement('div');
+        row.className = 'table-row';
+        row.innerHTML = `
+            <div class="table-cell">${symbol}</div>
+            <div class="table-cell">${data.name}</div>
+            <div class="table-cell">$${data.price.toFixed(2)}</div>
+            <div class="table-cell ${data.change >= 0 ? 'profit' : 'loss'}">
+                ${data.change >= 0 ? '+' : ''}${data.change.toFixed(2)}%
+            </div>
+            <div class="table-cell">
+                <button class="btn btn-sm btn-primary" onclick="selectStock('${symbol}')">Trade</button>
+            </div>
+        `;
+        stocksTableBody.appendChild(row);
+    }
+}
+
+function selectStock(symbol) {
+    selectedStock = symbol;
+    const stock = stocks[symbol];
+    
+    // Reset timeframe to 1 month
+    currentTimeframe = '1m';
+    
+    // Update chart header
+    document.getElementById('chartTitle').textContent = `${symbol} - ${stock.name}`;
+    const stockDetailsHeader = document.getElementById('stockDetailsHeader');
+    document.getElementById('headerPrice').textContent = `$${stock.price.toFixed(2)}`;
+    document.getElementById('headerChange').textContent = `${stock.change >= 0 ? '+' : ''}${stock.change.toFixed(2)}%`;
+    document.getElementById('headerChange').className = `price-change ${stock.change >= 0 ? 'positive' : 'negative'}`;
+    stockDetailsHeader.style.display = 'flex';
+    
+    // Show timeframe buttons
+    document.getElementById('timeframeButtons').style.display = 'flex';
+    
+    // Reset timeframe button styles
+    document.querySelectorAll('.timeframe-btn').forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.dataset.timeframe === '1m') {
+            btn.classList.add('active');
+        }
+    });
+    
+    // Show trading controls
+    document.getElementById('tradingControls').style.display = 'block';
+    document.getElementById('quantity').value = 1;
+    updateTradeCost();
+    
+    // Load and display chart
+    loadStockChart(symbol, '1m');
+}
+
+function changeTimeframe(timeframe) {
+    currentTimeframe = timeframe;
+    
+    // Update button styles
+    document.querySelectorAll('.timeframe-btn').forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.dataset.timeframe === timeframe) {
+            btn.classList.add('active');
+        }
+    });
+    
+    // Reload chart with new timeframe
+    if (selectedStock) {
+        loadStockChart(selectedStock, timeframe);
+    }
+}
+
+function loadStockChart(symbol, timeframe = '1m') {
+    // Show loading state
+    const chartContainer = document.getElementById('chartContainer');
+    const chartPlaceholder = document.getElementById('chartPlaceholder');
+    
+    fetch(`/api/stock/${symbol}/history?timeframe=${timeframe}`)
+        .then(response => response.json())
+        .then(data => {
+            // Hide placeholder
+            chartPlaceholder.style.display = 'none';
+            chartContainer.style.display = 'block';
+            
+            // Destroy previous chart if exists
+            if (priceChart) {
+                priceChart.destroy();
+            }
+            
+            const ctx = document.getElementById('priceChart').getContext('2d');
+            const isPositive = data.change >= 0;
+            
+            // Determine label for timeframe
+            let timeframeLabel = '30 Days';
+            if (timeframe === '1w') timeframeLabel = '7 Days';
+            if (timeframe === '5m') timeframeLabel = '5 Minutes';
+            
+            priceChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: data.labels,
+                    datasets: [{
+                        label: `${symbol} Price (${timeframeLabel})`,
+                        data: data.prices,
+                        borderColor: isPositive ? '#10b981' : '#ff6b6b',
+                        backgroundColor: isPositive ? 'rgba(16, 185, 129, 0.1)' : 'rgba(255, 107, 107, 0.1)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.4,
+                        pointRadius: 4,
+                        pointBackgroundColor: isPositive ? '#10b981' : '#ff6b6b',
+                        pointBorderColor: '#fff',
+                        pointBorderWidth: 2,
+                        pointHoverRadius: 6
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false
+                    },
+                    plugins: {
+                        legend: {
+                            display: true,
+                            labels: {
+                                color: '#e2e8f0',
+                                font: {
+                                    size: 12,
+                                    weight: 'bold'
+                                }
+                            }
+                        },
+                        tooltip: {
+                            backgroundColor: 'rgba(15, 23, 42, 0.9)',
+                            titleColor: '#e2e8f0',
+                            bodyColor: '#cbd5e1',
+                            borderColor: isPositive ? '#10b981' : '#ff6b6b',
+                            borderWidth: 1,
+                            padding: 10,
+                            displayColors: true
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: false,
+                            grid: {
+                                color: 'rgba(100, 116, 139, 0.2)',
+                                drawBorder: false
+                            },
+                            ticks: {
+                                color: '#cbd5e1',
+                                callback: function(value) {
+                                    return '$' + value.toFixed(2);
+                                }
+                            }
+                        },
+                        x: {
+                            grid: {
+                                display: false,
+                                drawBorder: false
+                            },
+                            ticks: {
+                                color: '#cbd5e1',
+                                maxRotation: 45,
+                                minRotation: 0
+                            }
+                        }
+                    }
+                }
+            });
+        })
+        .catch(error => {
+            console.error('Error loading chart:', error);
+            chartPlaceholder.textContent = 'Error loading chart data';
+        });
+}
+
+function increaseQuantity() {
+    const qty = document.getElementById('quantity');
+    qty.value = parseInt(qty.value) + 1;
+    updateTradeCost();
+}
+
+function decreaseQuantity() {
+    const qty = document.getElementById('quantity');
+    if (parseInt(qty.value) > 1) {
+        qty.value = parseInt(qty.value) - 1;
+        updateTradeCost();
+    }
+}
+
+function updateTradeCost() {
+    if (!selectedStock) return;
+    
+    const stock = stocks[selectedStock];
+    const quantity = parseInt(document.getElementById('quantity').value) || 0;
+    const totalCost = stock.price * quantity;
+    
+    document.getElementById('unitPrice').textContent = `$${stock.price.toFixed(2)}`;
+    document.getElementById('totalCost').textContent = `$${totalCost.toFixed(2)}`;
+}
+
+function executeBuy() {
+    if (!selectedStock) return;
+    
+    const quantity = parseInt(document.getElementById('quantity').value);
+    
+    fetch('/api/buy', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            symbol: selectedStock,
+            quantity: quantity
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showMessage('success', `✓ ${data.message}`);
+            setTimeout(() => {
+                location.reload();
+            }, 1500);
+        } else {
+            showMessage('error', `✗ ${data.error}`);
+        }
+    })
+    .catch(error => {
+        showMessage('error', '✗ An error occurred. Please try again.');
+        console.error('Error:', error);
+    });
+}
+
+function executeSell() {
+    if (!selectedStock) return;
+    
+    const quantity = parseInt(document.getElementById('quantity').value);
+    
+    fetch('/api/sell', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            symbol: selectedStock,
+            quantity: quantity
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showMessage('success', `✓ ${data.message}`);
+            setTimeout(() => {
+                location.reload();
+            }, 1500);
+        } else {
+            showMessage('error', `✗ ${data.error}`);
+        }
+    })
+    .catch(error => {
+        showMessage('error', '✗ An error occurred. Please try again.');
+        console.error('Error:', error);
+    });
+}
+
+function showMessage(type, message) {
+    const msgDiv = document.getElementById('confirmationMessage');
+    msgDiv.className = `message alert-${type}`;
+    msgDiv.textContent = message;
+    msgDiv.style.display = 'block';
+    
+    setTimeout(() => {
+        msgDiv.style.display = 'none';
+    }, 3000);
+}
+
+// Search functionality
+document.getElementById('stockSearch').addEventListener('input', function(e) {
+    const searchTerm = e.target.value.toUpperCase();
+    const items = document.querySelectorAll('.stock-item');
+    
+    items.forEach(item => {
+        const symbol = item.querySelector('.stock-symbol').textContent;
+        if (symbol.includes(searchTerm)) {
+            item.style.display = 'block';
+        } else {
+            item.style.display = 'none';
+        }
+    });
+});
+
+// Quantity input listener
+document.getElementById('quantity').addEventListener('change', updateTradeCost);
+
+// Initialize on page load
+initializeStocks();
+</script>
+{% endblock %}

@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+
+{% block title %}Portfolio - Stock Trading Platform{% endblock %}
+
+{% block content %}
+<div class="portfolio-container">
+    <h1>Your Portfolio</h1>
+
+    {% if portfolio %}
+        <div class="portfolio-stats">
+            <div class="stat-card">
+                <h4>Total Holdings</h4>
+                <p>{{ portfolio | length }} Position(s)</p>
+            </div>
+            <div class="stat-card">
+                <h4>Total Value</h4>
+                <p>${{ "%.2f"|format(portfolio | map(attribute='position_value') | sum) }}</p>
+            </div>
+            <div class="stat-card">
+                <h4>Total Gain/Loss</h4>
+                <p class="{% if (portfolio | map(attribute='gain_loss') | sum) >= 0 %}profit{% else %}loss{% endif %}">
+                    {% set total_gain = portfolio | map(attribute='gain_loss') | sum %}
+                    {% if total_gain >= 0 %}+{% endif %}${{ "%.2f"|format(total_gain) }}
+                </p>
+            </div>
+        </div>
+
+        <div class="card portfolio-table-card">
+            <div class="card-header">
+                <h3>Holdings Detail</h3>
+            </div>
+            <div class="card-body">
+                <div class="portfolio-table">
+                    <div class="table-header">
+                        <div class="table-cell">Symbol</div>
+                        <div class="table-cell">Company Name</div>
+                        <div class="table-cell">Shares</div>
+                        <div class="table-cell">Avg Price</div>
+                        <div class="table-cell">Current Price</div>
+                        <div class="table-cell">Total Value</div>
+                        <div class="table-cell">Gain/Loss</div>
+                        <div class="table-cell">Return %</div>
+                    </div>
+                    
+                    {% for holding in portfolio %}
+                        <div class="table-row">
+                            <div class="table-cell"><strong>{{ holding.symbol }}</strong></div>
+                            <div class="table-cell">{{ holding.name }}</div>
+                            <div class="table-cell">{{ holding.shares }}</div>
+                            <div class="table-cell">${{ "%.2f"|format(holding.avg_price) }}</div>
+                            <div class="table-cell">${{ "%.2f"|format(holding.current_price) }}</div>
+                            <div class="table-cell">${{ "%.2f"|format(holding.position_value) }}</div>
+                            <div class="table-cell {% if holding.gain_loss >= 0 %}profit{% else %}loss{% endif %}">
+                                {% if holding.gain_loss >= 0 %}+{% endif %}${{ "%.2f"|format(holding.gain_loss) }}
+                            </div>
+                            <div class="table-cell {% if holding.gain_loss_percent >= 0 %}profit{% else %}loss{% endif %}">
+                                {% if holding.gain_loss_percent >= 0 %}+{% endif %}{{ "%.2f"|format(holding.gain_loss_percent) }}%
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    {% else %}
+        <div class="empty-state-container">
+            <div class="empty-state">
+                <i class="fas fa-briefcase" style="font-size: 48px; margin-bottom: 20px; opacity: 0.5;"></i>
+                <h2>Your portfolio is empty</h2>
+                <p>You haven't purchased any stocks yet.</p>
+                <a href="{{ url_for('trade') }}" class="btn btn-primary">
+                    <i class="fas fa-plus"></i> Start Trading
+                </a>
+            </div>
+        </div>
+    {% endif %}
+</div>
+
+{% endblock %}

@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+
+{% block title %}Transaction History - Stock Trading Platform{% endblock %}
+
+{% block content %}
+<div class="transactions-container">
+    <h1>Transaction History</h1>
+
+    {% if transactions %}
+        <div class="card transactions-card">
+            <div class="card-header">
+                <h3>All Transactions</h3>
+            </div>
+            <div class="card-body">
+                <div class="transactions-list">
+                    {% for transaction in transactions %}
+                        <div class="transaction-card">
+                            <div class="transaction-header">
+                                <div class="transaction-type-badge {% if transaction.type == 'BUY' %}buy-badge{% else %}sell-badge{% endif %}">
+                                    <i class="fas fa-{% if transaction.type == 'BUY' %}arrow-down{% else %}arrow-up{% endif %}"></i>
+                                    {{ transaction.type }}
+                                </div>
+                                <div class="transaction-symbol">{{ transaction.symbol }}</div>
+                                <div class="transaction-status">
+                                    <span class="badge badge-{{ transaction.status | lower }}">{{ transaction.status }}</span>
+                                </div>
+                            </div>
+                            
+                            <div class="transaction-details-grid">
+                                <div class="detail-item">
+                                    <span class="detail-label">Shares:</span>
+                                    <span class="detail-value">{{ transaction.quantity }}</span>
+                                </div>
+                                <div class="detail-item">
+                                    <span class="detail-label">Price per Share:</span>
+                                    <span class="detail-value">${{ "%.2f"|format(transaction.price) }}</span>
+                                </div>
+                                <div class="detail-item">
+                                    <span class="detail-label">Total Amount:</span>
+                                    <span class="detail-value fw-bold">${{ "%.2f"|format(transaction.total) }}</span>
+                                </div>
+                                <div class="detail-item">
+                                    <span class="detail-label">Transaction ID:</span>
+                                    <span class="detail-value" style="font-size: 0.9em; color: #666;">{{ transaction.id }}</span>
+                                </div>
+                            </div>
+                            
+                            <div class="transaction-footer">
+                                <small>{{ transaction.timestamp }}</small>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    {% else %}
+        <div class="empty-state-container">
+            <div class="empty-state">
+                <i class="fas fa-history" style="font-size: 48px; margin-bottom: 20px; opacity: 0.5;"></i>
+                <h2>No transactions yet</h2>
+                <p>Your transaction history will appear here once you complete your first trade.</p>
+                <a href="{{ url_for('trade') }}" class="btn btn-primary">
+                    <i class="fas fa-plus"></i> Make Your First Trade
+                </a>
+            </div>
+        </div>
+    {% endif %}
+</div>
+
+{% endblock %}

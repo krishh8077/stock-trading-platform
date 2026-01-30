@@ -152,7 +152,7 @@ class SNSHandler:
     def __init__(self):
         self.sns_client = boto3.client('sns', region_name='us-east-1')
         # CHANGE THIS SNS ARN ONLY - DO NOT CHANGE ANYTHING ELSE
-        self.topic_arn = 'arn:aws:sns:us-east-1:YOUR_ACCOUNT_ID:stock-trading-notifications'
+        self.topic_arn = 'arn:aws:sns:us-east-1:086227530655:stock-trading-notifications'
     
     def send_trade_notification(self, username, subject, message):
         """Send trade notification via SNS"""
@@ -176,3 +176,4 @@ class AWSManager:
 
 # Global instance
 aws_manager = AWSManager()
+

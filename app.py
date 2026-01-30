@@ -151,7 +151,8 @@ def dashboard():
 def trade():
     username = session['username']
     user = aws_manager.dynamodb.get_user(username)
-    stocks = list(STOCK_DATABASE.keys())
+    # Pass full stock data (symbol -> {name, price, change}) to the template
+    stocks = STOCK_DATABASE
     return render_template('trade.html', stocks=stocks, user=user)
 
 @app.route('/portfolio')

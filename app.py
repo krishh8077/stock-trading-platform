@@ -1,8 +1,10 @@
+
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify
 from datetime import datetime
 from functools import wraps
 import uuid
 from aws import aws_manager
+import traceback
 
 app = Flask(__name__)
 app.secret_key = 'stock-trading-platform-secret-key-2026'
@@ -28,6 +30,14 @@ def login_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
+
+def log_exception(exc: Exception):
+    tb = traceback.format_exc()
+    with open('error.log', 'a') as f:
+        f.write(f"[{datetime.now().isoformat()}] {str(exc)}\n")
+        f.write(tb + "\n")
+    print(tb)
+
 @app.route('/')
 def index():
     if 'username' in session:
@@ -37,38 +47,48 @@ def index():
 @app.route('/signup', methods=['GET', 'POST'])
 def signup():
     if request.method == 'POST':
-        username = request.form.get('username')
-        password = request.form.get('password')
-        
-        if not username or not password:
-            return render_template('signup.html', error='Username and password required')
-        
-        # Check if user exists
-        user = aws_manager.dynamodb.get_user(username)
-        if user:
-            return render_template('signup.html', error='User already exists')
-        
-        # Create user with initial balance
-        aws_manager.dynamodb.create_user(username, password)
-        session['username'] = username
-        return redirect(url_for('dashboard'))
+        try:
+            username = request.form.get('username')
+            password = request.form.get('password')
+            
+            if not username or not password:
+                return render_template('signup.html', error='Username and password required')
+            
+            # Check if user exists
+            user = aws_manager.dynamodb.get_user(username)
+            if user:
+                return render_template('signup.html', error='User already exists')
+            
+            # Create user with initial balance
+            ok = aws_manager.dynamodb.create_user(username, password)
+            if not ok:
+                raise RuntimeError('Failed to create user in DynamoDB')
+            session['username'] = username
+            return redirect(url_for('dashboard'))
+        except Exception as e:
+            log_exception(e)
+            return render_template('signup.html', error='Internal server error, check error.log')
     
     return render_template('signup.html')
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        username = request.form.get('username')
-        password = request.form.get('password')
-        
-        # Get user from DynamoDB
-        user = aws_manager.dynamodb.get_user(username)
-        
-        if not user or user.get('password') != password:
-            return render_template('login.html', error='Invalid credentials')
-        
-        session['username'] = username
-        return redirect(url_for('dashboard'))
+        try:
+            username = request.form.get('username')
+            password = request.form.get('password')
+            
+            # Get user from DynamoDB
+            user = aws_manager.dynamodb.get_user(username)
+            
+            if not user or user.get('password') != password:
+                return render_template('login.html', error='Invalid credentials')
+            
+            session['username'] = username
+            return redirect(url_for('dashboard'))
+        except Exception as e:
+            log_exception(e)
+            return render_template('login.html', error='Internal server error, check error.log')
     
     return render_template('login.html')
 
@@ -240,3 +260,4 @@ def sell_stock():
 
 if __name__ == '__main__':
     app.run(debug=False, host='0.0.0.0', port=5000)
+

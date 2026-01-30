@@ -100,9 +100,51 @@ def logout():
 @app.route('/dashboard')
 @login_required
 def dashboard():
-    username = session['username']
-    user = aws_manager.dynamodb.get_user(username)
-    return render_template('dashboard.html', user=user)
+    try:
+        username = session['username']
+        user = aws_manager.dynamodb.get_user(username)
+        if not user:
+            return render_template('dashboard.html', error='User not found')
+
+        balance = float(user.get('balance', 0.0))
+
+        # Build portfolio list
+        holdings_dict = aws_manager.dynamodb.get_portfolio(username) or {}
+        portfolio = []
+        portfolio_value = 0.0
+        for symbol, data in holdings_dict.items():
+            shares = int(data.get('shares', 0))
+            avg_price = float(data.get('avg_price', 0.0))
+            current_price = float(STOCK_DATABASE.get(symbol, {}).get('price', avg_price))
+            position_value = shares * current_price
+            gain_loss = position_value - (shares * avg_price)
+            portfolio.append({
+                'symbol': symbol,
+                'shares': shares,
+                'avg_price': avg_price,
+                'current_price': current_price,
+                'position_value': position_value,
+                'gain_loss': gain_loss
+            })
+            portfolio_value += position_value
+
+        total_value = balance + portfolio_value
+
+        # Transactions
+        transactions = aws_manager.dynamodb.get_transactions(username) or []
+
+        return render_template(
+            'dashboard.html',
+            username=username,
+            balance=balance,
+            portfolio=portfolio,
+            portfolio_value=portfolio_value,
+            total_value=total_value,
+            transactions=transactions
+        )
+    except Exception as e:
+        log_exception(e)
+        return render_template('dashboard.html', error='Internal server error, check error.log')
 
 @app.route('/trade')
 @login_required
